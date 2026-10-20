@@ -1,0 +1,10 @@
+## @file
+#  uke (Xiaomi Pad 7, SM7675) platform package.
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+##
+[Defines]
+  DEC_SPECIFICATION = 0x0001001B
+  PACKAGE_NAME      = ukePkg
+  PACKAGE_GUID      = 7E3A5B2C-4D6F-4A8B-9C1D-2E3F4A5B6C7F
+  PACKAGE_VERSION   = 0.1

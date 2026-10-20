@@ -1,0 +1,20 @@
+#
+# Xiaomi Pad 7 (uke, SM7675) - Mu-Silicium device configuration.
+#
+[boot_shim]
+requires_kernel_header = true
+
+[uefi_fd]
+base = 0xA7100000
+size = 0x300000
+
+[boot_image_kernel]
+kernel_compression = "gzip"
+append_dtb         = true
+
+[boot_image]
+header_version = 4
+base           = 0x00000000
+kernel_offset  = 0x00008000
+tags_offset    = 0x01e00000
+pagesize       = 4096
