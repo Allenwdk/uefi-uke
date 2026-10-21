@@ -34,11 +34,6 @@
 #define ADD_LIMIT         SIZE_2GB     // DarwinBoot wants one contiguous 1 GiB window
 #define ADD_BELOW         SIZE_4GB     // stay inside what the MMU setup maps
 
-// Must match make-uke-adt.py (pram/embedded-panic-log-size) and MemoryMapLib.
-#define UKE_PANIC_LOG_BASE  0xC4000000ULL
-#define UKE_PANIC_LOG_SIZE  0x00400000ULL
-#define UKE_PANIC_MAGIC     0x46554E4BU  // 'FUNK'
-
 typedef struct {
   UINT64  Base;
   UINT64  End;       // exclusive
@@ -481,56 +476,6 @@ PublishInitrd (
   DEBUG ((DEBUG_ERROR, "UKEMEM: initrd block device 0x%lx size 0x%lx %r\n", Start, End - Start, Status));
 }
 
-STATIC
-VOID
-ReadPanicLog (
-  VOID
-  )
-{
-  EFI_STATUS      Status;
-  volatile UINT8  *Base;
-  volatile UINT32 *Header;
-  UINT32          Offset;
-  UINT32          Length;
-  UINTN           Index;
-
-  Base   = (volatile UINT8 *)(UINTN)UKE_PANIC_LOG_BASE;
-  Header = (volatile UINT32 *)(UINTN)UKE_PANIC_LOG_BASE;
-
-  //
-  // The PEI map marks this range as boot-services data, but a DXE access
-  // still needs a translation. Mapping it here also makes the contents
-  // readable before DarwinBoot and XNU touch the region.
-  //
-  Status = gDS->SetMemorySpaceAttributes (UKE_PANIC_LOG_BASE, UKE_PANIC_LOG_SIZE, EFI_MEMORY_WB);
-  DEBUG ((DEBUG_ERROR, "UKEMEM: panic log mapping %r\n", Status));
-  if (EFI_ERROR (Status)) {
-    return;
-  }
-
-  if (Header[0] != UKE_PANIC_MAGIC) {
-    return;
-  }
-
-  Offset = *(volatile UINT32 *)(Base + 20);
-  Length = *(volatile UINT32 *)(Base + 24);
-  if ((Offset < 0x28) || (Offset >= UKE_PANIC_LOG_SIZE) || (Length == 0) ||
-      (Length >= UKE_PANIC_LOG_SIZE) || (Offset + Length > UKE_PANIC_LOG_SIZE))
-  {
-    return;
-  }
-
-  for (Index = 0; (Index + 1 < sizeof (mMemStatus.PanicLine)) && (Index < Length); Index++) {
-    CHAR8  Ch = (CHAR8)Base[Offset + Index];
-    if ((Ch == '\0') || (Ch == '\r') || (Ch == '\n')) {
-      break;
-    }
-    mMemStatus.PanicLine[Index] = ((Ch >= 0x20) && (Ch < 0x7f)) ? Ch : ' ';
-  }
-  mMemStatus.PanicLine[Index] = '\0';
-  DEBUG ((DEBUG_ERROR, "UKEMEM: last panic '%a'\n", mMemStatus.PanicLine));
-}
-
 EFI_STATUS
 EFIAPI
 UkeBootMemoryDxeEntry (
@@ -567,6 +512,5 @@ UkeBootMemoryDxeEntry (
 
   AddMemory ((VOID *)(UINTN)Dtb);
   PublishInitrd ((VOID *)(UINTN)Dtb);
-  ReadPanicLog ();
   return EFI_SUCCESS;
 }
