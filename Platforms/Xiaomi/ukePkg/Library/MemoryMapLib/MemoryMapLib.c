@@ -51,6 +51,12 @@ STATIC EFI_MEMORY_REGION_DESCRIPTOR gMemoryDescriptor[] = {
   {"trust_ui_vm_region@f3800000", 0xF3800000, 0x04400000, AddMem, MEM_RES, UNCACHEABLE, Reserv, UNCACHED_UNBUFFERED_XN},
   {"oem_vm_region@f7c00000", 0xF7C00000, 0x04C00000, AddMem, MEM_RES, UNCACHEABLE, Reserv, UNCACHED_UNBUFFERED_XN},
   {"llcc_lpi_region@ff800000", 0xFF800000, 0x00380000, AddMem, MEM_RES, UNCACHEABLE, Reserv, UNCACHED_UNBUFFERED_XN},
+  // GMU pool (the ADT's gmu-memory node): the physical pages of the GMU payloads, adopted by the
+  // NativeAdreno driver over IODeviceMemory::withRange instead of allocated from the kernel VM.
+  // Reserved here so neither UEFI's allocator nor the kernel ever hands these pages out. The
+  // address sits in the otherwise unlisted 2-4 GiB hole (0xC3A00000..0xD8000000), where the
+  // panic-pram experiment (0xC4000000) already proved writable DRAM.
+  {"GMU Pool", 0xC8000000, 0x02000000, AddMem, SYS_MEM, SYS_MEM_CAP, Reserv, WRITE_BACK_XN},
   {"FD Reserved", 0xA7000000, 0x00100000, AddMem, SYS_MEM, SYS_MEM_CAP, BsData, WRITE_BACK},
   {"UEFI FD", 0xA7100000, 0x00300000, AddMem, SYS_MEM, SYS_MEM_CAP, BsData, WRITE_BACK},
   {"UEFI FD Reserved", 0xA7400000, 0x00200000, AddMem, SYS_MEM, SYS_MEM_CAP, BsData, WRITE_BACK},
