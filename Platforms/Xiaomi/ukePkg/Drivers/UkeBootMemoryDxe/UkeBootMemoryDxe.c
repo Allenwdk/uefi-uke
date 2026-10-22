@@ -208,6 +208,9 @@ AddMemory (
   }
 
   DEBUG ((DEBUG_ERROR, "UKEMEM: DT has %u memory ranges and %u reserved ranges\n", (UINT32)BankCount, (UINT32)ReservedCount));
+  for (Index = 0; Index < BankCount; Index++) {
+    DEBUG ((DEBUG_ERROR, "UKEMEM: DT memory %u: 0x%lx-0x%lx\n", (UINT32)Index, Banks[Index].Base, Banks[Index].End));
+  }
   if (BankCount == 0) {
     return;
   }
@@ -476,6 +479,42 @@ PublishInitrd (
   DEBUG ((DEBUG_ERROR, "UKEMEM: initrd block device 0x%lx size 0x%lx %r\n", Start, End - Start, Status));
 }
 
+//
+// The device runs under Gunyah and the hypervisor arms a virtual watchdog.
+// Android's gh_virt_wdt driver disables it during probe and pets it while
+// /dev/watchdog is open; XNU has no such driver, so the tablet resets about
+// half a minute into the boot.  These are the same SMC calls the driver makes.
+//
+STATIC
+VOID
+UkeScmCall (
+  IN  UINT64  A0,
+  IN  UINT64  A1,
+  IN  UINT64  A2,
+  OUT UINT64  *R0,
+  OUT UINT64  *R1
+  )
+{
+  register UINT64 X0 __asm ("x0") = A0;
+  register UINT64 X1 __asm ("x1") = A1;
+  register UINT64 X2 __asm ("x2") = A2;
+  register UINT64 X3 __asm ("x3") = 0;
+  register UINT64 X4 __asm ("x4") = 0;
+  register UINT64 X5 __asm ("x5") = 0;
+  register UINT64 X6 __asm ("x6") = 0;
+  register UINT64 X7 __asm ("x7") = 0;
+
+  __asm__ volatile (
+    "smc #0"
+    : "+r" (X0), "+r" (X1)
+    : "r" (X2), "r" (X3), "r" (X4), "r" (X5), "r" (X6), "r" (X7)
+    : "memory"
+    );
+
+  *R0 = X0;
+  *R1 = X1;
+}
+
 EFI_STATUS
 EFIAPI
 UkeBootMemoryDxeEntry (
@@ -485,7 +524,16 @@ UkeBootMemoryDxeEntry (
 {
   EFI_HOB_GUID_TYPE  *Hob;
   UINT64             Dtb;
+  UINT64             Scm0;
+  UINT64             Scm1;
   EFI_STATUS         Status;
+
+  UkeScmCall (0x86000008, 0xffff, 30000, &Scm0, &Scm1);
+  DEBUG ((DEBUG_ERROR, "UKEMEM: gunyah wdt time    0x%lx/0x%lx\n", Scm0, Scm1));
+  UkeScmCall (0x86000005, 2, 0, &Scm0, &Scm1);
+  DEBUG ((DEBUG_ERROR, "UKEMEM: gunyah wdt disable 0x%lx/0x%lx\n", Scm0, Scm1));
+  UkeScmCall (0x86000007, 0, 0, &Scm0, &Scm1);
+  DEBUG ((DEBUG_ERROR, "UKEMEM: gunyah wdt pet     0x%lx/0x%lx\n", Scm0, Scm1));
 
   ZeroMem (&mMemStatus, sizeof (mMemStatus));
   mMemStatus.Magic   = UKE_MEM_STATUS_MAGIC;
