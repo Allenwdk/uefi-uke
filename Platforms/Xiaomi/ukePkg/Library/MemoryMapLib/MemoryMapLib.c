@@ -69,6 +69,14 @@ STATIC EFI_MEMORY_REGION_DESCRIPTOR gMemoryDescriptor[] = {
   {"FV Region", 0xA7AD9000, 0x00400000, AddMem, SYS_MEM, SYS_MEM_CAP, BsData, WRITE_BACK_XN},
   {"UEFI RESV", 0xA7ED9000, 0x00127000, AddMem, SYS_MEM, SYS_MEM_CAP, BsData, WRITE_BACK_XN},
   {"DXE Heap", 0xA8000000, 0x1BA00000, AddMem, SYS_MEM, SYS_MEM_CAP, Conv, WRITE_BACK_XN},
+  // High DRAM banks from the live DT /memory reg (uke-live.dtb, 12 GB device): the SM7675 puts most
+  // RAM above 4 GiB exactly like SM8550, and the two ranges are physically adjacent, so DarwinBoot's
+  // RunEnd merges them into one 9 GiB conventional run (0x8C0000000..0xB00000000). Declared statically
+  // the sheng way (uefi-sheng MemoryMapLib "DRAM bank 1 low/high"), because gDS->AddMemorySpace in
+  // UkeBootMemoryDxe cannot map ranges outside the SEC page tables (its ADD_BELOW = SIZE_4GB).
+  // 0x880000000/0x8B0000000/0x8B8100000 pieces are left out until the big run is validated.
+  {"DRAM bank high 0x8C0000000", 0x8C0000000, 0xC0000000, AddMem, SYS_MEM, SYS_MEM_CAP, Conv, WRITE_BACK_XN},
+  {"DRAM bank high 0x980000000", 0x980000000, 0x180000000, AddMem, SYS_MEM, SYS_MEM_CAP, Conv, WRITE_BACK_XN},
   {"IMEM Base", 0x14680000, 0x0002A000, NoHob, MMAP_IO, INITIALIZED, Conv, NS_DEVICE},
   {"IMEM Cookie Base", 0x146AA000, 0x00016000, AddDev, MMAP_IO, INITIALIZED, Conv, NS_DEVICE},
   {"IPC_ROUTER_TOP", 0x00400000, 0x00100000, AddDev, MMAP_IO, UNCACHEABLE, MmIO, NS_DEVICE},
