@@ -34,3 +34,10 @@ This Project focuses on Making ARM-Based Devices Boot Operating Systems like Win
 
 All code except drivers in `GPLDrivers` & `GPLApplications` & `GPLLibrary` directories are licensed under BSD-2-Clause. <br />
 GPL Drivers are licensed under `GPLv2` or later license.
+
+
+## Uke UniXNU compressed GPU payload (2026-11-03)
+
+The uke platform accepts standard UEFI-compressed FAT payloads and retains raw FAT support. It decompresses into the reserved `0xA8000000–0xB2000000` window after checking runtime FDT/input overlap, then publishes the existing BlockIO path. This transports the complete 160MiB FAT in a vendor_boot smaller than96MiB. Use paired boot/vendor_boot images.
+
+The user-accepted uke iPadOS27 GPU baseline has boot SHA256 `2e46cba11922b6f2ea4018cdf5b75a564d8215fc75a8e17547bd90a5763c1328`, vendor_boot SHA256 `cd41b67e983f2d7032d78831a1efb929931f417a1b598346101625e6ed37e2b6` and kernel CRC `90B6BC701210D9DB`. This acceptance covers the reported boot/UI symptoms; it is not a general firmware qualification for other devices.
