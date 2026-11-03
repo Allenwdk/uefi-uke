@@ -16,7 +16,7 @@
   Nothing here depends on a hardware address; every range comes from the DT.
 **/
 
-#include <Uefi.h>
+#include <PiDxe.h>
 #include <Library/BaseLib.h>
 #include <Library/BaseMemoryLib.h>
 #include <Library/DebugLib.h>
@@ -396,6 +396,7 @@ PublishInitrd (
   INT32       EndLength;
   UINT64      Start;
   UINT64      End;
+  EFI_GCD_MEMORY_SPACE_DESCRIPTOR  Descriptor;
   EFI_HANDLE  Handle;
 
   Chosen = FdtPathOffset (Fdt, "/chosen");
@@ -437,23 +438,24 @@ PublishInitrd (
   }
 
   //
-  // Add and map the initrd before any file system driver reads it; it can
-  // sit outside the DT /memory ranges.
+  // SEC must already have reserved and mapped the ABL handoff window. Adding
+  // SystemMemory here exposes the medium to AllocatePool; adding Reserved over
+  // an existing SystemMemory descriptor fails and cannot undo earlier damage.
+  // Never publish a live block device backed by unreserved allocator pages.
   //
-  Status = gDS->AddMemorySpace (
-                  EfiGcdMemoryTypeSystemMemory,
-                  Start,
-                  End - Start,
-                  EFI_MEMORY_UC | EFI_MEMORY_WC | EFI_MEMORY_WT | EFI_MEMORY_WB
-                  );
-  if (!EFI_ERROR (Status)) {
-    Status = gDS->SetMemorySpaceAttributes (Start, End - Start, EFI_MEMORY_WB);
-    if (EFI_ERROR (Status)) {
-      gDS->RemoveMemorySpace (Start, End - Start);
-    }
+  Status = gDS->GetMemorySpaceDescriptor (Start, &Descriptor);
+  if (EFI_ERROR (Status)) {
+    DEBUG ((DEBUG_ERROR, "UKEMEM: initrd descriptor 0x%lx %r\n", Start, Status));
+    return;
   }
-
-  DEBUG ((DEBUG_ERROR, "UKEMEM: initrd memory 0x%lx-0x%lx %r\n", Start, End - 1, Status));
+  DEBUG ((DEBUG_ERROR, "UKEMEM: initrd GCD type %u range 0x%lx +0x%lx\n",
+          (UINT32)Descriptor.GcdMemoryType, Descriptor.BaseAddress, Descriptor.Length));
+  if ((Descriptor.GcdMemoryType != EfiGcdMemoryTypeReserved) ||
+      (Start < Descriptor.BaseAddress) ||
+      (End - Descriptor.BaseAddress > Descriptor.Length)) {
+    DEBUG ((DEBUG_ERROR, "UKEMEM: refusing unreserved initrd 0x%lx-0x%lx\n", Start, End));
+    return;
+  }
 
   mRamBase                = (UINT8 *)(UINTN)Start;
   mMedia.MediaId          = 1;

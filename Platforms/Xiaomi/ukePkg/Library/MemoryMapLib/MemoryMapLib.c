@@ -68,7 +68,17 @@ STATIC EFI_MEMORY_REGION_DESCRIPTOR gMemoryDescriptor[] = {
   {"Sched Heap", 0xA76D9000, 0x00400000, AddMem, SYS_MEM, SYS_MEM_CAP, BsData, WRITE_BACK_XN},
   {"FV Region", 0xA7AD9000, 0x00400000, AddMem, SYS_MEM, SYS_MEM_CAP, BsData, WRITE_BACK_XN},
   {"UEFI RESV", 0xA7ED9000, 0x00127000, AddMem, SYS_MEM, SYS_MEM_CAP, BsData, WRITE_BACK_XN},
-  {"DXE Heap", 0xA8000000, 0x1BA00000, AddMem, SYS_MEM, SYS_MEM_CAP, Conv, WRITE_BACK_XN},
+  // ABL relocates the vendor ramdisk; the image header's 0x01000000 is not its live address.
+  // Device evidence: /chosen initrd 0xB2D51000..0xB7FFF41C (docs/PROGRESS.md), and stock
+  // uke-live.dts has 0xB5CD7000..0xB7FFF4CC. Keep sheng's 0xA8000000..0xB8000000 boot
+  // handoff reservation before SEC constructs the HOB heap or DXE starts allocating.
+  // The runtime FDT remains authoritative; PublishInitrd rejects an unreserved range.
+  {"ABL Boot Handoff", 0xA8000000, 0x10000000, AddMem, MEM_RES, SYS_MEM_CAP, Reserv, WRITE_BACK_XN},
+  // Keep sheng's DXE start too: its intervening 43 MiB is a display carveout.
+  // uke's display is elsewhere, so retain this interval as a conservative
+  // handoff guard for the live FDT/bootconfig until their addresses are measured.
+  {"ABL Handoff Guard", 0xB8000000, 0x02B00000, AddMem, MEM_RES, SYS_MEM_CAP, Reserv, WRITE_BACK_XN},
+  {"DXE Heap", 0xBAB00000, 0x08F00000, AddMem, SYS_MEM, SYS_MEM_CAP, Conv, WRITE_BACK_XN},
   // High DRAM banks from the live DT /memory reg (uke-live.dtb, 12 GB device): the SM7675 puts most
   // RAM above 4 GiB exactly like SM8550, and the two ranges are physically adjacent, so DarwinBoot's
   // RunEnd merges them into one 9 GiB conventional run (0x8C0000000..0xB00000000). Declared statically
