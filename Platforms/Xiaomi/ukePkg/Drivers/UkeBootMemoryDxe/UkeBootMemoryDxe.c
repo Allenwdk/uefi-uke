@@ -1,3 +1,4 @@
+#include <Library/UefiDecompressLib.h>
 /** @file
   Memory and RAM disk from the device tree the previous stage handed over.
 
@@ -429,13 +430,7 @@ PublishInitrd (
   // the real volume size: drop the partial tail sector instead of refusing
   // to publish the volume.
   //
-  if (((End - Start) % RAM_BLOCK_SIZE) != 0) {
-    End &= ~((UINT64)RAM_BLOCK_SIZE - 1);
-    DEBUG ((DEBUG_ERROR, "UKEMEM: initrd end rounded to 0x%lx\n", End));
-    if (End <= Start) {
-      return;
-    }
-  }
+
 
   //
   // SEC must already have reserved and mapped the ABL handoff window. Adding
@@ -456,6 +451,52 @@ PublishInitrd (
     DEBUG ((DEBUG_ERROR, "UKEMEM: refusing unreserved initrd 0x%lx-0x%lx\n", Start, End));
     return;
   }
+
+  // Optional standard UEFI-compressed FAT. The original ABL buffer remains
+  // reserved. Decode only into the lower, disjoint part of that reservation.
+  if ((End - Start >= 512) &&
+      (ReadUnaligned32 ((UINT32 *)(UINTN)(Start + 4)) == 0x0A000000u)) {
+    UINT32 PackedSize = ReadUnaligned32 ((UINT32 *)(UINTN)Start);
+    UINT32 ExpandedSize = 0;
+    UINT32 ScratchSize = 0;
+    VOID *Scratch;
+    RETURN_STATUS Result;
+    CONST UINT64 Destination = 0xA8000000ULL;
+    CONST UINT64 Capacity = 0x0A000000ULL; // 160 MiB, ends at 0xB2000000
+    UINT64 FdtStart = (UINT64)(UINTN)Fdt;
+    UINT64 FdtEnd = FdtStart + FdtTotalSize (Fdt);
+    if ((PackedSize > End - Start - 8) || (PackedSize == 0)) { return; }
+    Result = UefiDecompressGetInfo ((VOID *)(UINTN)Start, PackedSize + 8,
+                                   &ExpandedSize, &ScratchSize);
+    if (RETURN_ERROR (Result) || ExpandedSize != Capacity ||
+        Start < Destination + Capacity ||
+        (FdtStart < Destination + Capacity && FdtEnd > Destination)) { return; }
+    Status = gDS->GetMemorySpaceDescriptor (Destination, &Descriptor);
+    if (EFI_ERROR (Status) || Descriptor.GcdMemoryType != EfiGcdMemoryTypeReserved ||
+        Destination < Descriptor.BaseAddress ||
+        Destination + Capacity > Descriptor.BaseAddress + Descriptor.Length) { return; }
+    Scratch = AllocatePool (ScratchSize);
+    if (Scratch == NULL) { return; }
+    Result = UefiDecompress ((VOID *)(UINTN)Start, (VOID *)(UINTN)Destination, Scratch);
+    FreePool (Scratch);
+    if (RETURN_ERROR (Result) ||
+        ((UINT8 *)(UINTN)Destination)[510] != 0x55 ||
+        ((UINT8 *)(UINTN)Destination)[511] != 0xAA) { return; }
+    Start = Destination;
+    End = Destination + ExpandedSize;
+    DEBUG ((DEBUG_ERROR, "UKEMEM: UEFI FAT decompressed %u to %u bytes\n", PackedSize, ExpandedSize));
+  }
+  if (((End - Start) % RAM_BLOCK_SIZE) != 0) {
+    End &= ~((UINT64)RAM_BLOCK_SIZE - 1);
+    DEBUG ((DEBUG_ERROR, "UKEMEM: initrd end rounded to 0x%lx\n", End));
+    if (End <= Start) {
+      return;
+    }
+  }
+
+  if ((End - Start < 512) ||
+      ((UINT8 *)(UINTN)Start)[510] != 0x55 ||
+      ((UINT8 *)(UINTN)Start)[511] != 0xAA) { return; }
 
   mRamBase                = (UINT8 *)(UINTN)Start;
   mMedia.MediaId          = 1;

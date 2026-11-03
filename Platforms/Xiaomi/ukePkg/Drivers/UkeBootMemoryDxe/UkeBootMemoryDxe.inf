@@ -18,6 +18,7 @@
 [LibraryClasses]
   BaseLib
   BaseMemoryLib
+  UefiDecompressLib
   DebugLib
   DxeServicesTableLib
   FdtLib
